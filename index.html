@@ -135,7 +135,132 @@ input[type="range"]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;b
 <button class="bottom-expand" id="showLinksBtn"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
 <div class="info-modal" id="infoModal"><div class="info-box"><div class="info-label">微信公众号</div><div class="info-name">黑白间设计</div></div></div>
 
-<script>let cnv;let blocks=[];let mode="text";let offscreenCanvas=null;let rawImg=null;let imgW=0,imgH=0;let offsetX=0,offsetY=0;let panel;let isDragging=false;const cfg={text:"hi laohei",fontName:"sans-serif",fontSize:200,pixelSize:10,imgScale:1,knockRadius:20,knockForce:6,gravity:.35,textColor:"#ffffff",bgColor:"#000000"};const MAX_DIM=500;function setup(){cnv=createCanvas(windowWidth,windowHeight);pixelDensity(1);noStroke();panel=document.getElementById("controlPanel");rebuildBlocks();bindUI();cnv.elt.addEventListener("pointerdown",onCanvasPointerDown);window.addEventListener("pointermove",onWindowPointerMove);window.addEventListener("pointerup",onWindowPointerUp)}function windowResized(){resizeCanvas(windowWidth,windowHeight);if(mode==="text")rebuildBlocks()}function onCanvasPointerDown(e){isDragging=true;knock(mouseX,mouseY)}function onWindowPointerMove(e){if(!isDragging)return;let panelVisible=!panel.classList.contains("collapsed");if(panelVisible&&e.clientX>windowWidth-300)return;knock(e.clientX,e.clientY)}function onWindowPointerUp(e){isDragging=false}function knock(cx,cy){let mx=cx-offsetX;let my=cy-offsetY;let radius=cfg.knockRadius;let force=cfg.knockForce;let angleOffset=Math.random()*Math.PI*2;let irregularity=.3+Math.random()*.25;for(let i=0;i<blocks.length;i++){let b=blocks[i];if(b.knocked)continue;let bx=b.x+b.size/2;let by=b.y+b.size/2;let dx=bx-mx;let dy=by-my;let dist=Math.sqrt(dx*dx+dy*dy);let blockAngle=Math.atan2(dy,dx);let wobble=1+Math.sin(blockAngle*3+angleOffset)*irregularity;let effectiveRadius=radius*wobble;if(dist<effectiveRadius){let power=(1-dist/effectiveRadius)*force;let angle=Math.atan2(dy,dx);b.knock(Math.cos(angle)*power,Math.sin(angle)*power-power*.4)}}}function draw(){background(cfg.bgColor);if(mode==="image"){let availW=panel.classList.contains("collapsed")?windowWidth:windowWidth-300;offsetX=(availW-imgW)/2;offsetY=(windowHeight-imgH)/2}else{offsetX=0;offsetY=0}let ctx=drawingContext;push();translate(offsetX,offsetY);for(let i=0;i<blocks.length;i++){blocks[i].update();blocks[i].draw(ctx)}pop()}class PixelBlock{constructor(x,y,size,r,g,b){this.x=x;this.y=y;this.size=size;this.r=r;this.g=g;this.b=b;this.vx=0;this.vy=0;this.rot=0;this.vr=0;this.knocked=false;this.alpha=1;this.life=1;this.color="rgb("+r+","+g+","+b+")"}knock(fx,fy){this.knocked=true;this.vx=fx;this.vy=fy;this.vr=(Math.random()-.5)*.35}update(){if(!this.knocked)return;this.vy+=cfg.gravity;this.vx*=.99;this.vy*=.99;this.x+=this.vx;this.y+=this.vy;this.rot+=this.vr;this.life-=.012;this.alpha=Math.max(0,this.life)}draw(ctx){if(this.life<=0)return;if(!this.knocked){ctx.fillStyle=this.color;ctx.fillRect(this.x,this.y,this.size-1,this.size-1)}else{ctx.save();ctx.globalAlpha=this.alpha;ctx.translate(this.x+this.size/2,this.y+this.size/2);ctx.rotate(this.rot);ctx.fillStyle=this.color;ctx.fillRect(-this.size/2,-this.size/2,this.size,this.size);ctx.restore()}}}function rebuildBlocks(){blocks=[];let ps=cfg.pixelSize;if(mode==="image"&&offscreenCanvas){let ctx=offscreenCanvas.getContext("2d");let imgData=ctx.getImageData(0,0,imgW,imgH);for(let y=0;y<imgH;y+=ps){for(let x=0;x<imgW;x+=ps){let sx=Math.min(x+(ps>>1),imgW-1);let sy=Math.min(y+(ps>>1),imgH-1);let idx=(sy*imgW+sx)*4;let a=imgData.data[idx+3];if(a<10)continue;blocks.push(new PixelBlock(x,y,ps,imgData.data[idx],imgData.data[idx+1],imgData.data[idx+2]))}}}else{let w=windowWidth;let h=windowHeight;offscreenCanvas=document.createElement("canvas");offscreenCanvas.width=w;offscreenCanvas.height=h;let ctx=offscreenCanvas.getContext("2d");let lines=cfg.text.split("\n");let lh=cfg.fontSize*1.4;ctx.font="900 "+cfg.fontSize+"px "+cfg.fontName;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle=cfg.textColor;let startY=h/2-(lines.length-1)*lh/2;for(let i=0;i<lines.length;i++){ctx.fillText(lines[i],w/2,startY+i*lh)}let imgData=ctx.getImageData(0,0,w,h);for(let y=0;y<h;y+=ps){for(let x=0;x<w;x+=ps){let sx=Math.min(x+(ps>>1),w-1);let sy=Math.min(y+(ps>>1),h-1);let idx=(sy*w+sx)*4;let a=imgData.data[idx+3];if(a<10)continue;blocks.push(new PixelBlock(x,y,ps,imgData.data[idx],imgData.data[idx+1],imgData.data[idx+2]))}}}}function loadImageFile(file){let reader=new FileReader;reader.onload=function(e){let img=new Image;img.onload=function(){rawImg=img;mode="image";rebuildImageCanvas();rebuildBlocks();document.getElementById("imgFileName").textContent=file.name};img.src=e.target.result};reader.readAsDataURL(file)}function rebuildImageCanvas(){if(!rawImg)return;let scale=Math.min(MAX_DIM/rawImg.width,MAX_DIM/rawImg.height);if(scale>1)scale=1;scale*=cfg.imgScale;let w=Math.floor(rawImg.width*scale);let h=Math.floor(rawImg.height*scale);offscreenCanvas=document.createElement("canvas");offscreenCanvas.width=w;offscreenCanvas.height=h;let ctx=offscreenCanvas.getContext("2d");ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";ctx.drawImage(rawImg,0,0,w,h);imgW=w;imgH=h}function clearImage(){rawImg=null;offscreenCanvas=null;mode="text";document.getElementById("imgFileName").textContent="";document.getElementById("imgFile").value="";rebuildBlocks()}function bindUI(){let panelEl=document.getElementById("controlPanel");document.getElementById("toggleBtn").onclick=function(){panelEl.classList.toggle("collapsed")};document.getElementById("textInput").addEventListener("input",function(e){cfg.text=e.target.value||" ";if(mode==="text")rebuildBlocks()});document.getElementById("fontInput").addEventListener("input",function(e){cfg.fontName=e.target.value;if(mode==="text")rebuildBlocks()});document.getElementById("fontFile").addEventListener("change",function(e){let file=e.target.files[0];if(!file)return;document.getElementById("fontFileName").textContent=file.name;let reader=new FileReader;reader.onload=function(ev){let family="custom_"+Date.now();let fontFace=new FontFace(family,"url("+ev.target.result+")");fontFace.load().then(function(loaded){document.fonts.add(loaded);cfg.fontName=family;document.getElementById("fontInput").value=file.name;if(mode==="text")rebuildBlocks()}).catch(function(err){document.getElementById("fontFileName").textContent="加载失败"})};reader.readAsDataURL(file);e.target.value=""});function bindSlider(id,valId,key,fmt){let el=document.getElementById(id);let valEl=document.getElementById(valId);el.addEventListener("input",function(){let v=parseFloat(el.value);cfg[key]=v;valEl.textContent=fmt?fmt(v):v})}bindSlider("fontSize","fontSizeVal","fontSize",function(v){return v});bindSlider("pixelSize","pixelSizeVal","pixelSize",function(v){return v});bindSlider("imgScale","imgScaleVal","imgScale",function(v){return v.toFixed(2)});bindSlider("knockRadius","knockRadiusVal","knockRadius",function(v){return v});bindSlider("knockForce","knockForceVal","knockForce",function(v){return v});bindSlider("gravity","gravityVal","gravity",function(v){return v.toFixed(2)});document.getElementById("fontSize").addEventListener("change",function(){if(mode==="text")rebuildBlocks()});document.getElementById("pixelSize").addEventListener("change",function(){rebuildBlocks()});document.getElementById("imgScale").addEventListener("change",function(){if(mode==="image"){rebuildImageCanvas();rebuildBlocks()}});document.getElementById("textColorPick").addEventListener("input",function(e){cfg.textColor=e.target.value;if(mode==="text")rebuildBlocks()});document.getElementById("bgColorPick").addEventListener("input",function(e){cfg.bgColor=e.target.value});document.getElementById("imgFile").addEventListener("change",function(e){if(e.target.files&&e.target.files[0]){loadImageFile(e.target.files[0]);e.target.value=""}});document.getElementById("imgClearBtn").onclick=function(){clearImage()};document.getElementById("resetBtn").onclick=function(){rebuildBlocks()};document.getElementById("saveBtn").onclick=function(){saveCanvas("pixel-knock","png")};var bottomLinks=document.getElementById("bottomLinks");var showLinksBtn=document.getElementById("showLinksBtn");var hideLinksBtn=document.getElementById("hideLinksBtn");var infoModal=document.getElementById("infoModal");hideLinksBtn.onclick=function(){bottomLinks.classList.remove("visible");bottomLinks.classList.add("hidden");showLinksBtn.classList.add("visible")};showLinksBtn.onclick=function(){bottomLinks.classList.remove("hidden");bottomLinks.classList.add("visible");showLinksBtn.classList.remove("visible")};document.getElementById("wechatBtn").onclick=function(){infoModal.classList.add("show")};infoModal.onclick=function(e){if(e.target===infoModal)infoModal.classList.remove("show")};var cursorDot=document.getElementById("cursorDot");document.addEventListener("pointermove",function(e){cursorDot.style.left=e.clientX+"px";cursorDot.style.top=e.clientY+"px"});panelEl.addEventListener("pointerenter",function(){cursorDot.classList.add("hide")});panelEl.addEventListener("pointerleave",function(){cursorDot.classList.remove("hide")});bottomLinks.addEventListener("pointerenter",function(){cursorDot.classList.add("hide")});bottomLinks.addEventListener("pointerleave",function(){cursorDot.classList.remove("hide")});bottomLinks.classList.add("visible")}</script>
+<script>let cnv;let blocks=[];let mode="text";let offscreenCanvas=null;let rawImg=null;let imgW=0,imgH=0;let offsetX=0,offsetY=0;let panel;let isDragging=false;const cfg={text:"hi laohei",fontName:"sans-serif",fontSize:200,pixelSize:10,imgScale:1,knockRadius:20,knockForce:6,gravity:.35,textColor:"#ffffff",bgColor:"#000000"};const MAX_DIM=500;function setup(){cnv=createCanvas(windowWidth,windowHeight);pixelDensity(1);noStroke();panel=document.getElementById("controlPanel");rebuildBlocks();bindUI();cnv.elt.addEventListener("pointerdown",onCanvasPointerDown);window.addEventListener("pointermove",onWindowPointerMove);window.addEventListener("pointerup",onWindowPointerUp)}function windowResized(){resizeCanvas(windowWidth,windowHeight);if(mode==="text")rebuildBlocks()}function onCanvasPointerDown(e){isDragging=true;knock(mouseX,mouseY)}function onWindowPointerMove(e){if(!isDragging)return;let panelVisible=!panel.classList.contains("collapsed");if(panelVisible&&e.clientX>windowWidth-300)return;knock(e.clientX,e.clientY)}function onWindowPointerUp(e){isDragging=false}function knock(cx,cy){let mx=cx-offsetX;let my=cy-offsetY;let radius=cfg.knockRadius;let force=cfg.knockForce;let angleOffset=Math.random()*Math.PI*2;let irregularity=.3+Math.random()*.25;for(let i=0;i<blocks.length;i++){let b=blocks[i];if(b.knocked)continue;let bx=b.x+b.size/2;let by=b.y+b.size/2;let dx=bx-mx;let dy=by-my;let dist=Math.sqrt(dx*dx+dy*dy);let blockAngle=Math.atan2(dy,dx);let wobble=1+Math.sin(blockAngle*3+angleOffset)*irregularity;let effectiveRadius=radius*wobble;if(dist<effectiveRadius){let power=(1-dist/effectiveRadius)*force;let angle=Math.atan2(dy,dx);b.knock(Math.cos(angle)*power,Math.sin(angle)*power-power*.4)}}}function draw(){background(cfg.bgColor);if(mode==="image"){let availW=panel.classList.contains("collapsed")?windowWidth:windowWidth-300;offsetX=(availW-imgW)/2;offsetY=(windowHeight-imgH)/2}else{offsetX=0;offsetY=0}let ctx=drawingContext;push();translate(offsetX,offsetY);for(let i=0;i<blocks.length;i++){blocks[i].update();blocks[i].draw(ctx)}pop()}class PixelBlock{constructor(x,y,size,r,g,b){this.x=x;this.y=y;this.size=size;this.r=r;this.g=g;this.b=b;this.vx=0;this.vy=0;this.rot=0;this.vr=0;this.knocked=false;this.alpha=1;this.life=1;this.color="rgb("+r+","+g+","+b+")"}knock(fx,fy){this.knocked=true;this.vx=fx;this.vy=fy;this.vr=(Math.random()-.5)*.35}update(){if(!this.knocked)return;this.vy+=cfg.gravity;this.vx*=.99;this.vy*=.99;this.x+=this.vx;this.y+=this.vy;this.rot+=this.vr;this.life-=.012;this.alpha=Math.max(0,this.life)}draw(ctx){if(this.life<=0)return;if(!this.knocked){ctx.fillStyle=this.color;ctx.fillRect(this.x,this.y,this.size-1,this.size-1)}else{ctx.save();ctx.globalAlpha=this.alpha;ctx.translate(this.x+this.size/2,this.y+this.size/2);ctx.rotate(this.rot);ctx.fillStyle=this.color;ctx.fillRect(-this.size/2,-this.size/2,this.size,this.size);ctx.restore()}}}function rebuildBlocks(){blocks=[];let ps=cfg.pixelSize;if(mode==="image"&&offscreenCanvas){let ctx=offscreenCanvas.getContext("2d");let imgData=ctx.getImageData(0,0,imgW,imgH);for(let y=0;y<imgH;y+=ps){for(let x=0;x<imgW;x+=ps){let sx=Math.min(x+(ps>>1),imgW-1);let sy=Math.min(y+(ps>>1),imgH-1);let idx=(sy*imgW+sx)*4;let a=imgData.data[idx+3];if(a<10)continue;blocks.push(new PixelBlock(x,y,ps,imgData.data[idx],imgData.data[idx+1],imgData.data[idx+2]))}}}else{let w=windowWidth;let h=windowHeight;offscreenCanvas=document.createElement("canvas");offscreenCanvas.width=w;offscreenCanvas.height=h;let ctx=offscreenCanvas.getContext("2d");let lines=cfg.text.split("\n");let lh=cfg.fontSize*1.4;ctx.font="900 "+cfg.fontSize+"px "+cfg.fontName;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle=cfg.textColor;let startY=h/2-(lines.length-1)*lh/2;for(let i=0;i<lines.length;i++){ctx.fillText(lines[i],w/2,startY+i*lh)}let imgData=ctx.getImageData(0,0,w,h);for(let y=0;y<h;y+=ps){for(let x=0;x<w;x+=ps){let sx=Math.min(x+(ps>>1),w-1);let sy=Math.min(y+(ps>>1),h-1);let idx=(sy*w+sx)*4;let a=imgData.data[idx+3];if(a<10)continue;blocks.push(new PixelBlock(x,y,ps,imgData.data[idx],imgData.data[idx+1],imgData.data[idx+2]))}}}}function loadImageFile(file){let reader=new FileReader;reader.onload=function(e){let img=new Image;img.onload=function(){rawImg=img;mode="image";rebuildImageCanvas();rebuildBlocks();document.getElementById("imgFileName").textContent=file.name};img.src=e.target.result};reader.readAsDataURL(file)}function rebuildImageCanvas(){if(!rawImg)return;let scale=Math.min(MAX_DIM/rawImg.width,MAX_DIM/rawImg.height);if(scale>1)scale=1;scale*=cfg.imgScale;let w=Math.floor(rawImg.width*scale);let h=Math.floor(rawImg.height*scale);offscreenCanvas=document.createElement("canvas");offscreenCanvas.width=w;offscreenCanvas.height=h;let ctx=offscreenCanvas.getContext("2d");ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";ctx.drawImage(rawImg,0,0,w,h);imgW=w;imgH=h}function clearImage(){rawImg=null;offscreenCanvas=null;mode="text";document.getElementById("imgFileName").textContent="";document.getElementById("imgFile").value="";rebuildBlocks()}
+// ============ 数据持久化 ============
+var LS_PREFIX = 'pixel_';
+var LS_IMAGE_MAX = 4 * 1024 * 1024;
+
+function persistCfg(key, value) {
+  try { localStorage.setItem(LS_PREFIX + key, String(value)); }
+  catch (e) { console.warn('[persist] localStorage 写入失败（' + key + '）:', e.message); }
+}
+
+function persistImage(dataUrl) {
+  if (!dataUrl) return;
+  if (dataUrl.length > LS_IMAGE_MAX) {
+    console.warn('[persist] 图片过大（' + Math.round(dataUrl.length / 1024) + 'KB），未存 localStorage');
+    return;
+  }
+  try { localStorage.setItem(LS_PREFIX + 'image', dataUrl); }
+  catch (e) { console.warn('[persist] 图片存 localStorage 失败:', e.message); }
+}
+function clearPersistedImage() {
+  localStorage.removeItem(LS_PREFIX + 'image');
+}
+
+function persistFont(dataUrl, fontName) {
+  if (!dataUrl) return;
+  if (dataUrl.length > LS_IMAGE_MAX) {
+    console.warn('[persist] 字体过大，未存 localStorage');
+    return;
+  }
+  try {
+    localStorage.setItem(LS_PREFIX + 'font', dataUrl);
+    localStorage.setItem(LS_PREFIX + 'fontName', fontName);
+  } catch (e) { console.warn('[persist] 字体存 localStorage 失败:', e.message); }
+}
+function clearPersistedFont() {
+  localStorage.removeItem(LS_PREFIX + 'font');
+  localStorage.removeItem(LS_PREFIX + 'fontName');
+}
+
+function restoreCfg() {
+  var keys = ['text', 'fontName', 'fontSize', 'pixelSize', 'imgScale', 'knockRadius', 'knockForce', 'gravity', 'textColor', 'bgColor'];
+  var count = 0;
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    var v = localStorage.getItem(LS_PREFIX + k);
+    if (v === null) continue;
+    if (typeof cfg[k] === 'boolean') cfg[k] = (v === 'true');
+    else if (typeof cfg[k] === 'number') cfg[k] = parseFloat(v);
+    else if (typeof cfg[k] === 'string') cfg[k] = v;
+    count++;
+  }
+  if (count === 0) return false;
+  syncUIFromCfg();
+  console.log('[persist] 还原', count, '个参数');
+  return true;
+}
+
+function syncUIFromCfg() {
+  var $ = function(id) { return document.getElementById(id); };
+  // Sync all range inputs that match cfg keys
+  for (var k in cfg) {
+    var el = $(k);
+    if (el && el.type === 'range') {
+      el.value = cfg[k];
+      // trigger label update
+      if (el.oninput) el.oninput({target: el});
+      else el.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+  }
+  // Sync color inputs
+  for (var k2 in cfg) {
+    var el2 = $(k2);
+    if (el2 && el2.type === 'color') {
+      el2.value = cfg[k2];
+      el2.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+  }
+  // Sync text inputs
+  var ti = $('textInput');
+  if (ti && cfg.text !== undefined) { ti.value = cfg.text; ti.dispatchEvent(new Event('input', {bubbles: true})); }
+  var fn = $('fontName') || $('fontInput');
+  if (fn && cfg.fontName !== undefined) { 
+    if (fn.tagName === 'INPUT') { fn.value = cfg.fontName; }
+  }
+
+}
+
+function restoreImage() {
+  var src = localStorage.getItem(LS_PREFIX + 'image');
+  if (!src) return false;
+  var im = new Image();
+  im.onload = function() {
+    // Call project-specific image handler if exists
+    if (typeof onImageRestore === 'function') onImageRestore(im);
+    var t = document.getElementById('thumbImg') || document.getElementById('imgFileName');
+    if (t && t.tagName === 'IMG') t.src = src;
+    console.log('[persist] 还原图片');
+  };
+  im.onerror = function() { console.warn('[persist] 还原图片失败'); };
+  im.src = src;
+  return true;
+}
+
+function restoreFont() {
+  var src = localStorage.getItem(LS_PREFIX + 'font');
+  if (!src) return false;
+  var fname = localStorage.getItem(LS_PREFIX + 'fontName') || 'custom';
+  var face = new FontFace(fname, 'url(' + src + ')');
+  face.load().then(function(f) {
+    document.fonts.add(f);
+    if (typeof cfg !== 'undefined' && cfg.fontName !== undefined) cfg.fontName = fname;
+    var fn = document.getElementById('fontName') || document.getElementById('fontFileName');
+    if (fn) { if (fn.tagName === 'INPUT') fn.value = fname; }
+    console.log('[persist] 还原字体:', fname);
+  }).catch(function(e) {
+    console.warn('[persist] 还原字体失败:', e.message);
+  });
+  return true;
+}
+
+function bindUI(){
+  // 恢复持久化设置
+  try { restoreCfg(); } catch(e) { console.warn('restoreCfg err:', e.message); }
+  try { if (!restoreImage()) { /* no saved image, load default */ } } catch(e) {}
+  try { restoreFont(); } catch(e) {}
+let panelEl=document.getElementById("controlPanel");document.getElementById("toggleBtn").onclick=function(){panelEl.classList.toggle("collapsed")};document.getElementById("textInput").addEventListener("input",function(e){cfg.text=e.target.value||" ";if(mode==="text")rebuildBlocks()});document.getElementById("fontInput").addEventListener("input",function(e){cfg.fontName=e.target.value;if(mode==="text")rebuildBlocks()});document.getElementById("fontFile").addEventListener("change",function(e){let file=e.target.files[0];if(!file)return;document.getElementById("fontFileName").textContent=file.name;let reader=new FileReader;reader.onload=function(ev){let family="custom_"+Date.now();let fontFace=new FontFace(family,"url("+ev.target.result+")");fontFace.load().then(function(loaded){document.fonts.add(loaded);cfg.fontName=family;document.getElementById("fontInput").value=file.name;if(mode==="text")rebuildBlocks()}).catch(function(err){document.getElementById("fontFileName").textContent="加载失败"})};reader.readAsDataURL(file);e.target.value=""});function bindSlider(id,valId,key,fmt){let el=document.getElementById(id);let valEl=document.getElementById(valId);el.addEventListener("input",function(){let v=parseFloat(el.value);cfg[key]=v;valEl.textContent=fmt?fmt(v):v})}bindSlider("fontSize","fontSizeVal","fontSize",function(v){return v});bindSlider("pixelSize","pixelSizeVal","pixelSize",function(v){return v});bindSlider("imgScale","imgScaleVal","imgScale",function(v){return v.toFixed(2)});bindSlider("knockRadius","knockRadiusVal","knockRadius",function(v){return v});bindSlider("knockForce","knockForceVal","knockForce",function(v){return v});bindSlider("gravity","gravityVal","gravity",function(v){return v.toFixed(2)});document.getElementById("fontSize").addEventListener("change",function(){if(mode==="text")rebuildBlocks()});document.getElementById("pixelSize").addEventListener("change",function(){rebuildBlocks()});document.getElementById("imgScale").addEventListener("change",function(){if(mode==="image"){rebuildImageCanvas();rebuildBlocks()}});document.getElementById("textColorPick").addEventListener("input",function(e){cfg.textColor=e.target.value;if(mode==="text")rebuildBlocks()});document.getElementById("bgColorPick").addEventListener("input",function(e){cfg.bgColor=e.target.value});document.getElementById("imgFile").addEventListener("change",function(e){if(e.target.files&&e.target.files[0]){loadImageFile(e.target.files[0]);e.target.value=""}});document.getElementById("imgClearBtn").onclick=function(){clearImage()};document.getElementById("resetBtn").onclick=function(){rebuildBlocks()};document.getElementById("saveBtn").onclick=function(){saveCanvas("pixel-knock","png")};var bottomLinks=document.getElementById("bottomLinks");var showLinksBtn=document.getElementById("showLinksBtn");var hideLinksBtn=document.getElementById("hideLinksBtn");var infoModal=document.getElementById("infoModal");hideLinksBtn.onclick=function(){bottomLinks.classList.remove("visible");bottomLinks.classList.add("hidden");showLinksBtn.classList.add("visible")};showLinksBtn.onclick=function(){bottomLinks.classList.remove("hidden");bottomLinks.classList.add("visible");showLinksBtn.classList.remove("visible")};document.getElementById("wechatBtn").onclick=function(){infoModal.classList.add("show")};infoModal.onclick=function(e){if(e.target===infoModal)infoModal.classList.remove("show")};var cursorDot=document.getElementById("cursorDot");document.addEventListener("pointermove",function(e){cursorDot.style.left=e.clientX+"px";cursorDot.style.top=e.clientY+"px"});panelEl.addEventListener("pointerenter",function(){cursorDot.classList.add("hide")});panelEl.addEventListener("pointerleave",function(){cursorDot.classList.remove("hide")});bottomLinks.addEventListener("pointerenter",function(){cursorDot.classList.add("hide")});bottomLinks.addEventListener("pointerleave",function(){cursorDot.classList.remove("hide")});bottomLinks.classList.add("visible")}</script>
 <!-- hide-ui-v2 -->
 <style>
 body.hide-all-ui .control-panel,
